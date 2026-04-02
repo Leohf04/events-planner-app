@@ -29,17 +29,22 @@ jobs:
       - name: Install dependencies
         run: npm install --legacy-peer-deps
 
-      - name: Install Expo
-        run: npm install -g expo eas-cli
+      - name: Install Expo CLI
+        run: npm install -g expo
 
-      - name: Expo prebuild
+      - name: Clean prebuild
         run: npx expo prebuild --platform android --clean
+
+      - name: Setup Gradle
+        run: |
+          cd android
+          chmod +x gradlew
 
       - name: Build APK
         run: |
           cd android
-          chmod +x gradlew
-          ./gradlew assembleRelease
+          ./gradlew assembleRelease --stacktrace
+          echo "Build completed"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
