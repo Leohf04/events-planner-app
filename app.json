@@ -13,5 +13,15 @@
         "buildType": "app-bundle"
       }
     }
+  },
+  "extra": {
+    "eas": {
+      "projectId": "f1b3ae45-5d99-406e-973f-cabb702abf35"
+    }
+  },
+  "expo": {
+    "android": {
+      "package": "com.leo00004.eventsplannerapp"
+    }
   }
 }
