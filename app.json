@@ -1,37 +1,16 @@
 {
-  "expo": {
-    "name": "EventsPlanner",
-    "slug": "events-planner-app",
-    "version": "1.0.0",
-    "orientation": "portrait",
-    "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#1E40AF"
+  "cli": {
+    "version": ">= 18.4.0"
+  },
+  "build": {
+    "preview": {
+      "android": {
+        "buildType": "apk"
+      }
     },
-    "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.eventsplanner.app"
-    },
-    "android": {
-      "package": "com.eventsplanner.app",
-      "adaptiveIcon": {
-        "foregroundColor": "#1E40AF",
-        "backgroundColor": "#1E40AF"
-      },
-      "predictiveBackGestureEnabled": false
-    },
-    "web": {
-      "favicon": "./assets/favicon.png"
-    },
-    "plugins": [
-      "expo-dev-client"
-    ],
-    "extra": {
-      "eas": {
-        "projectId": "f1b3ae45-5d99-406e-973f-cabb702abf35"
+    "production": {
+      "android": {
+        "buildType": "app-bundle"
       }
     }
   }
