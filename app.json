@@ -1,27 +1,40 @@
 {
-  "cli": {
-    "version": ">= 18.4.0"
-  },
-  "build": {
-    "preview": {
-      "android": {
-        "buildType": "apk"
+  "expo": {
+    "name": "Events Planner App",
+    "slug": "events-planner-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#ffffff",
+        "foregroundImage": "./assets/adaptive-icon.png"
+      },
+      "package": "com.leo00004.eventsplannerapp"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [],
+    "extra": {
+      "eas": {
+        "projectId": "f1b3ae45-5d99-406e-973f-cabb702abf35"
       }
     },
-    "production": {
-      "android": {
-        "buildType": "app-bundle"
-      }
-    }
-  },
-  "extra": {
-    "eas": {
-      "projectId": "f1b3ae45-5d99-406e-973f-cabb702abf35"
-    }
-  },
-  "expo": {
-    "android": {
-      "package": "com.leo00004.eventsplannerapp"
+    "updates": {
+      "url": "https://u.dev/f1b3ae45-5d99-406e-973f-cabb702abf35"
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
     }
   }
 }

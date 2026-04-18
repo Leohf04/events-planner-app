@@ -7,7 +7,7 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
-      "node": "22.14.0"
+      "node": "20.20.2"
     },
     "preview": {
       "android": {
