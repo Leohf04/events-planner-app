@@ -1,0 +1,16 @@
+# Expo
+.expo/
+dist/
+web-build/
+
+# Dependencias
+node_modules/
+
+# Logs
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# Sistema (Xubuntu/Linux)
+.DS_Store
+Thumbs.db
