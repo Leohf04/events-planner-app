@@ -3,7 +3,7 @@ name: Build Android APK (Local EAS)
 on:
   workflow_dispatch: # Permite ejecutarlo manualmente desde GitHub
   push:
-    branches: [main] # O cámbiala por 'master' si usas esa
+    branches: [master] # O cámbiala por 'master' si usas esa
 
 jobs:
   build:
