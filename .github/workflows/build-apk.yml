@@ -16,11 +16,22 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 18
-          # Cambiamos el cache a pnpm
-          cache: "pnpm"
 
-      - name: Instalar pnpm globalmente
-        run: npm install -g pnpm
+      - name: Instalar pnpm (con acción oficial)
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8 # Puedes usar la versión que tengas en tu proyecto
+
+      - name: Obtener directorio de almacenamiento de pnpm
+        run: echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_ENV
+
+      - name: Cache de pnpm
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
 
       - name: Instalar dependencias con pnpm
         run: pnpm install --frozen-lockfile
