@@ -12,31 +12,37 @@ jobs:
       - name: Checkout código
         uses: actions/checkout@v4
 
+      # 1. Definir el packageManager en package.json (evita que Corepack intervenga)
+      - name: Definir packageManager
+        run: |
+          npm pkg set packageManager=pnpm@8.15.9
+
+      # 2. Configurar Node.js 18
       - name: Setup Node.js 18
         uses: actions/setup-node@v4
         with:
           node-version: 18
 
-      # Habilitamos Corepack y activamos pnpm (sin depender de acciones externas)
-      - name: Habilitar Corepack y pnpm
-        run: |
-          corepack enable
-          corepack prepare pnpm@latest --activate
+      # 3. Instalar pnpm (acción oficial, más fiable)
+      - name: Instalar pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 8.15.9  # Versión estable reciente
 
-      # Verificamos que pnpm está disponible
+      # 4. Verificar que pnpm está disponible
       - name: Verificar pnpm
         run: pnpm --version
 
-      # Usamos cache para acelerar builds futuros (opcional pero recomendado)
+      # 5. Cache de pnpm (acelera)
       - name: Cache de pnpm
         uses: actions/cache@v4
         with:
-          path: ~/.local/share/pnpm/store
+          path: ~/.pnpm-store
           key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
           restore-keys: |
             ${{ runner.os }}-pnpm-store-
 
-      # Instalamos dependencias sin congelar el lockfile (para evitar incompatibilidades)
+      # 6. Instalar dependencias sin congelar el lockfile (por si hay diferencias de versión)
       - name: Instalar dependencias
         run: pnpm install --no-frozen-lockfile
 
