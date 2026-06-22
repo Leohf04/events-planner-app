@@ -1,9 +1,9 @@
 name: Build Android APK (Local EAS)
 
 on:
-  workflow_dispatch: # Permite ejecutarlo manualmente desde GitHub
+  workflow_dispatch:
   push:
-    branches: [master] # O cámbiala por 'master' si usas esa
+    branches: [master]
 
 jobs:
   build:
@@ -16,9 +16,16 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 18
-          cache: "npm"
+          # Cambiamos el cache a pnpm
+          cache: "pnpm"
 
-      - name: Setup Java 17 (necesario para Android)
+      - name: Instalar pnpm globalmente
+        run: npm install -g pnpm
+
+      - name: Instalar dependencias con pnpm
+        run: pnpm install --frozen-lockfile
+
+      - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
           distribution: "temurin"
@@ -27,17 +34,13 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Instalar dependencias del proyecto
-        run: npm ci
-
       - name: Instalar EAS CLI globalmente
-        run: npm install -g eas-cli
+        run: pnpm install -g eas-cli
 
-      - name: Login a Expo (obligatorio para EAS local)
+      - name: Login a Expo
         run: npx expo login --non-interactive --token ${{ secrets.EXPO_TOKEN }}
-        # Si no quieres usar token, borra esta línea y usa eas build con --local y te pedirá login interactivo, pero en GitHub no es posible.
 
-      - name: Construir APK localmente (sin consumir créditos)
+      - name: Construir APK localmente
         run: |
           eas build --platform android --local --profile preview --output=app.apk --non-interactive
         env:
@@ -48,4 +51,4 @@ jobs:
         with:
           name: mi-app-android
           path: app.apk
-          retention-days: 7 # El archivo estará disponible 7 días para descargar
+          retention-days: 7
