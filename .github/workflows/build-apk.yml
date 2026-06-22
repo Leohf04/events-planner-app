@@ -34,7 +34,7 @@ jobs:
             ${{ runner.os }}-pnpm-store-
 
       - name: Instalar dependencias con pnpm
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --no-frozen-lockfile
 
       - name: Setup Java 17
         uses: actions/setup-java@v4
