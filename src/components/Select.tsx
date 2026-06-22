@@ -1,26 +1,19 @@
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  Modal,
-  FlatList,
-  SafeAreaView,
-} from 'react-native';
-import { colors, borderRadius, spacing } from '../theme';
+import { View, StyleSheet, TouchableOpacity } from 'react-native';
+import { Text, TextInput, Menu, Button, Dialog, Portal } from 'react-native-paper';
+import { colors, spacing, borderRadius } from '../theme';
 
 interface SelectOption {
   label: string;
-  value: string;
+  value: string | number;
 }
 
 interface SelectProps {
   label?: string;
   placeholder?: string;
-  value?: string;
+  value?: string | number;
   options: SelectOption[];
-  onChange: (value: string) => void;
+  onChange: (value: string | number) => void;
   error?: string;
 }
 
@@ -36,144 +29,81 @@ export const Select: React.FC<SelectProps> = ({
 
   const selectedOption = options.find(opt => opt.value === value);
 
-  const handleSelect = (optionValue: string) => {
-    onChange(optionValue);
-    setVisible(false);
-  };
-
   return (
-    <View style={styles.container}>
-      {label && <Text style={styles.label}>{label}</Text>}
-      
-      <TouchableOpacity
-        style={[styles.select, error && styles.selectError]}
-        onPress={() => setVisible(true)}
-      >
-        <Text style={[styles.selectText, !selectedOption && styles.placeholder]}>
-          {selectedOption?.label || placeholder}
-        </Text>
-        <Text style={styles.arrow}>▼</Text>
+    <View style={styles.wrapper}>
+      <TouchableOpacity onPress={() => setVisible(true)}>
+        <TextInput
+          mode="outlined"
+          label={label}
+          value={selectedOption?.label || ''}
+          placeholder={placeholder}
+          error={!!error}
+          editable={false}
+          right={<TextInput.Icon icon="chevron-down" onPress={() => setVisible(true)} />}
+          outlineColor={colors.border}
+          activeOutlineColor={colors.primary}
+          style={styles.input}
+        />
       </TouchableOpacity>
-      
-      {error && <Text style={styles.error}>{error}</Text>}
-
-      <Modal visible={visible} transparent animationType="slide">
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setVisible(false)}
-        >
-          <SafeAreaView style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{label || 'Seleccionar'}</Text>
-              <TouchableOpacity onPress={() => setVisible(false)}>
-                <Text style={styles.closeButton}>✕</Text>
-              </TouchableOpacity>
-            </View>
-            <FlatList
-              data={options}
-              keyExtractor={(item) => item.value}
-              renderItem={({ item }) => (
-                <TouchableOpacity
+      {error && (
+        <Text style={styles.error}>{error}</Text>
+      )}
+      <Portal>
+        <Dialog visible={visible} onDismiss={() => setVisible(false)}>
+          <Dialog.Title>{label || 'Seleccionar'}</Dialog.Title>
+          <Dialog.Content>
+            {options.map((opt) => (
+              <TouchableOpacity
+                key={opt.value}
+                style={[
+                  styles.option,
+                  opt.value === value && styles.optionSelected,
+                ]}
+                onPress={() => {
+                  onChange(opt.value);
+                  setVisible(false);
+                }}
+              >
+                <Text
                   style={[
-                    styles.option,
-                    item.value === value && styles.optionSelected,
+                    styles.optionText,
+                    opt.value === value && styles.optionTextSelected,
                   ]}
-                  onPress={() => handleSelect(item.value)}
                 >
-                  <Text
-                    style={[
-                      styles.optionText,
-                      item.value === value && styles.optionTextSelected,
-                    ]}
-                  >
-                    {item.label}
-                  </Text>
-                </TouchableOpacity>
-              )}
-            />
-          </SafeAreaView>
-        </TouchableOpacity>
-      </Modal>
+                  {opt.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setVisible(false)}>Cerrar</Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
+  wrapper: {
     marginBottom: spacing.md,
   },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.text.primary,
-    marginBottom: spacing.xs,
-  },
-  select: {
+  input: {
     backgroundColor: colors.white,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: borderRadius.sm,
-    padding: spacing.sm + 2,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  selectError: {
-    borderColor: colors.error,
-  },
-  selectText: {
-    fontSize: 14,
-    color: colors.text.primary,
-  },
-  placeholder: {
-    color: colors.text.disabled,
-  },
-  arrow: {
-    fontSize: 10,
-    color: colors.text.secondary,
   },
   error: {
-    fontSize: 12,
     color: colors.error,
+    fontSize: 12,
     marginTop: spacing.xs,
   },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: colors.white,
-    borderTopLeftRadius: borderRadius.lg,
-    borderTopRightRadius: borderRadius.lg,
-    maxHeight: '60%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: colors.text.primary,
-  },
-  closeButton: {
-    fontSize: 20,
-    color: colors.text.secondary,
-    padding: spacing.xs,
-  },
   option: {
-    padding: spacing.md,
+    paddingVertical: spacing.sm + 4,
+    paddingHorizontal: spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
   optionSelected: {
-    backgroundColor: colors.primary + '20',
+    backgroundColor: 'rgba(10, 132, 255, 0.08)',
   },
   optionText: {
     fontSize: 16,
@@ -184,3 +114,5 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
+
+export default Select;

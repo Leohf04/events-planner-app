@@ -1,0 +1,51 @@
+name: Build Android APK (Local EAS)
+
+on:
+  workflow_dispatch: # Permite ejecutarlo manualmente desde GitHub
+  push:
+    branches: [main] # O cámbiala por 'master' si usas esa
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: "npm"
+
+      - name: Setup Java 17 (necesario para Android)
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "17"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Instalar dependencias del proyecto
+        run: npm ci
+
+      - name: Instalar EAS CLI globalmente
+        run: npm install -g eas-cli
+
+      - name: Login a Expo (obligatorio para EAS local)
+        run: npx expo login --non-interactive --token ${{ secrets.EXPO_TOKEN }}
+        # Si no quieres usar token, borra esta línea y usa eas build con --local y te pedirá login interactivo, pero en GitHub no es posible.
+
+      - name: Construir APK localmente (sin consumir créditos)
+        run: |
+          eas build --platform android --local --profile preview --output=app.apk --non-interactive
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Subir APK como artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: mi-app-android
+          path: app.apk
+          retention-days: 7 # El archivo estará disponible 7 días para descargar

@@ -5,36 +5,32 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": false,
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#001529"
     },
     "ios": {
       "supportsTablet": true
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#ffffff",
+        "backgroundColor": "#001529",
         "foregroundImage": "./assets/adaptive-icon.png"
       },
-      "package": "com.leo00004.eventsplannerapp"
+      "edgeToEdgeEnabled": true,
+      "package": "com.eventsplanner.facturacion"
     },
-    "web": {
-      "favicon": "./assets/favicon.png"
-    },
-    "plugins": [],
     "extra": {
       "eas": {
-        "projectId": "f1b3ae45-5d99-406e-973f-cabb702abf35"
+        "projectId": "7ba6b271-75c9-4be0-8b9f-87cd5203690e"
       }
     },
-    "updates": {
-      "url": "https://u.dev/f1b3ae45-5d99-406e-973f-cabb702abf35"
+    "web": {
+      "bundler": "metro"
     },
-    "runtimeVersion": {
-      "policy": "appVersion"
-    }
+    "owner": "juan0406"
   }
 }

@@ -1,161 +1,198 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View,
-  Text,
   FlatList,
   TouchableOpacity,
   StyleSheet,
-  Alert,
   RefreshControl,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
+import { Text, Searchbar, IconButton, Menu, Divider, Button } from 'react-native-paper';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Card, EmptyState, Loading, Header, Input } from '../../components';
+import { Card, EmptyState, Loading, Header } from '../../components';
 import { colors, spacing } from '../../theme';
-import api from '../../services/api';
-import { formatDate } from '../../utils/helpers';
-
-export interface Cliente {
-  id: number;
-  nombre: string;
-  primerApellido: string;
-  segundoApellido?: string;
-  carnetIdentidad: string;
-  gmail: string;
-  direccion?: string;
-  telefono?: string;
-}
+import { getClientes, deleteCliente, searchClientes, ClienteRow } from '../../database/repositories/clientesRepository';
+import { useAlert } from '../../components/AlertDialog';
 
 type ClientesStackParamList = {
   ClientesList: undefined;
-  ClienteForm: { cliente?: Cliente };
-  ClienteDetail: { cliente: Cliente };
+  ClienteForm: { clienteId?: number };
 };
 
 export const ClientesListScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<ClientesStackParamList>>();
-  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [clientes, setClientes] = useState<ClienteRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [menuVisible, setMenuVisible] = useState<number | null>(null);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const alert = useAlert();
 
-  const fetchClientes = async () => {
+  const fetchClientes = useCallback(async (query?: string) => {
     try {
-      const data = await api.get<Cliente[]>('/clientes');
+      const data = query?.trim() ? await searchClientes(query) : await getClientes();
       setClientes(data);
     } catch (error) {
-      Alert.alert('Error', 'No se pudieron cargar los clientes');
+      alert.showAlert({ title: 'Error', message: 'No se pudieron cargar los clientes' });
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
-      fetchClientes();
-    }, [])
+      fetchClientes(searchQuery);
+    }, [fetchClientes, searchQuery])
   );
+
+  const onChangeSearch = (text: string) => {
+    setSearchQuery(text);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    setLoading(true);
+    searchTimer.current = setTimeout(() => {
+      fetchClientes(text);
+    }, 300);
+  };
 
   const onRefresh = () => {
     setRefreshing(true);
     fetchClientes();
   };
 
-  const handleDelete = async (id: number) => {
-    Alert.alert(
-      'Confirmar',
-      '¿Está seguro de eliminar este cliente?',
-      [
+  const handleDelete = (id: number) => {
+    alert.showAlert({
+      title: 'Confirmar',
+      message: '¿Está seguro de eliminar este cliente?',
+      buttons: [
         { text: 'Cancelar', style: 'cancel' },
         {
           text: 'Eliminar',
           style: 'destructive',
           onPress: async () => {
             try {
-              await api.delete(`/clientes/${id}`);
-              fetchClientes();
+              await deleteCliente(id);
+              await fetchClientes();
             } catch (error) {
-              Alert.alert('Error', 'No se pudo eliminar el cliente');
+              alert.showAlert({ title: 'Error', message: 'No se pudo eliminar el cliente' });
             }
           },
         },
       ]
-    );
+    });
   };
 
-  const filteredClientes = clientes.filter((cliente) => {
-    const query = searchQuery.toLowerCase();
-    return (
-      cliente.nombre.toLowerCase().includes(query) ||
-      cliente.primerApellido.toLowerCase().includes(query) ||
-      cliente.carnetIdentidad.toLowerCase().includes(query) ||
-      cliente.gmail.toLowerCase().includes(query)
-    );
-  });
-
-  const renderCliente = ({ item }: { item: Cliente }) => (
-    <TouchableOpacity
-      onPress={() => navigation.navigate('ClienteDetail', { cliente: item })}
-      onLongPress={() => handleDelete(item.id)}
-    >
-      <Card style={styles.card}>
-        <View style={styles.cardHeader}>
-          <Text style={styles.clienteName}>
-            {item.nombre} {item.primerApellido} {item.segundoApellido || ''}
-          </Text>
-          <Text style={styles.ci}>CI: {item.carnetIdentidad}</Text>
+  const renderCliente = ({ item }: { item: ClienteRow }) => (
+    <Card style={styles.card}>
+      <TouchableOpacity
+        onPress={() => navigation.navigate('ClienteForm', { clienteId: item.id })}
+        style={styles.cardTouchable}
+      >
+        <View style={styles.cardContent}>
+          <View style={styles.cardInfo}>
+            <Text variant="titleMedium" style={styles.clienteName}>
+              {item.nombre} {item.primerApellido} {item.segundoApellido || ''}
+            </Text>
+            {item.carnetIdentidad && (
+              <Text variant="bodySmall" style={styles.infoText}>
+                CI: {item.carnetIdentidad}
+              </Text>
+            )}
+            {item.gmail && (
+              <Text variant="bodySmall" style={styles.infoText}>
+                {item.gmail}
+              </Text>
+            )}
+            {item.telefono && (
+              <Text variant="bodySmall" style={styles.infoText}>
+                {item.telefono}
+              </Text>
+            )}
+          </View>
+          <Menu
+            visible={menuVisible === item.id}
+            onDismiss={() => setMenuVisible(null)}
+            anchor={
+              <IconButton
+                icon="dots-vertical"
+                onPress={() => setMenuVisible(item.id)}
+              />
+            }
+          >
+            <Menu.Item
+              leadingIcon="pencil"
+              onPress={() => {
+                setMenuVisible(null);
+                navigation.navigate('ClienteForm', { clienteId: item.id });
+              }}
+              title="Editar"
+            />
+            <Divider />
+            <Menu.Item
+              leadingIcon="delete"
+              onPress={() => {
+                setMenuVisible(null);
+                handleDelete(item.id);
+              }}
+              title="Eliminar"
+            />
+          </Menu>
         </View>
-        <View style={styles.cardBody}>
-          <Text style={styles.info}>📧 {item.gmail}</Text>
-          {item.telefono && <Text style={styles.info}>📱 {item.telefono}</Text>}
-          {item.direccion && <Text style={styles.info}>📍 {item.direccion}</Text>}
-        </View>
-      </Card>
-    </TouchableOpacity>
+      </TouchableOpacity>
+    </Card>
   );
 
   if (loading) {
-    return <Loading message="Cargando clientes..." />;
+    return <Loading />;
   }
 
   return (
-    <View style={styles.container}>
-      <Header
-        title="Clientes"
-        subtitle={`${clientes.length} registros`}
-        rightAction={{
-          icon: '+',
-          onPress: () => navigation.navigate('ClienteForm', {}),
-        }}
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
+      <Header title="Clientes" />
+      <Searchbar
+        placeholder="Buscar clientes..."
+        onChangeText={onChangeSearch}
+        value={searchQuery}
+        style={styles.searchbar}
+        icon="magnify"
+        clearIcon="close-circle"
       />
-
-      <View style={styles.searchContainer}>
-        <Input
-          placeholder="Buscar cliente..."
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-        />
-      </View>
-
-      {filteredClientes.length === 0 ? (
+      {clientes.length === 0 ? (
         <EmptyState
-          message={searchQuery ? 'No se encontraron clientes' : 'No hay clientes registrados'}
-          actionLabel={searchQuery ? undefined : 'Agregar Cliente'}
-          onAction={searchQuery ? undefined : () => navigation.navigate('ClienteForm', {})}
+          message="No hay clientes"
+          icon="account-group-outline"
+          actionLabel="Crear Cliente"
+          onAction={() => navigation.navigate('ClienteForm', {})}
         />
       ) : (
         <FlatList
-          data={filteredClientes}
-          keyExtractor={(item) => item.id.toString()}
+          data={clientes}
           renderItem={renderCliente}
+          keyExtractor={(item) => item.id.toString()}
           contentContainerStyle={styles.list}
+          keyboardShouldPersistTaps="handled"
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           }
         />
       )}
-    </View>
+      <View style={styles.bottomButton}>
+        <Button
+          mode="contained"
+          icon="plus-circle"
+          onPress={() => navigation.navigate('ClienteForm', {})}
+          contentStyle={{ paddingVertical: 6 }}
+        >
+          Crear Cliente
+        </Button>
+      </View>
+    </KeyboardAvoidingView>
   );
 };
 
@@ -164,36 +201,41 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background.layout,
   },
-  searchContainer: {
-    padding: spacing.md,
+  searchbar: {
+    margin: spacing.md,
     backgroundColor: colors.white,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
   },
   list: {
     padding: spacing.md,
+    paddingTop: 0,
   },
   card: {
-    marginBottom: spacing.sm,
+    marginBottom: spacing.md,
   },
-  cardHeader: {
-    marginBottom: spacing.sm,
+  cardTouchable: {
+    width: '100%',
+  },
+  cardContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  cardInfo: {
+    flex: 1,
   },
   clienteName: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontWeight: 'bold',
     color: colors.text.primary,
+    marginBottom: spacing.xs,
   },
-  ci: {
-    fontSize: 12,
+  infoText: {
     color: colors.text.secondary,
     marginTop: 2,
   },
-  cardBody: {
-    gap: 4,
-  },
-  info: {
-    fontSize: 13,
-    color: colors.text.secondary,
+  bottomButton: {
+    padding: spacing.md,
+    paddingTop: 0,
   },
 });
+
+export default ClientesListScreen;

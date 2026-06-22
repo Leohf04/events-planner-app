@@ -1,77 +1,56 @@
 import React from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  StyleSheet,
-  TextInputProps,
-} from 'react-native';
-import { colors, borderRadius, spacing } from '../theme';
+import { TextInput, HelperText } from 'react-native-paper';
+import { View, StyleSheet } from 'react-native';
+import { colors, spacing } from '../theme';
 
-interface InputProps extends TextInputProps {
+interface InputProps extends Omit<React.ComponentProps<typeof TextInput>, 'mode'> {
   label?: string;
   error?: string;
   required?: boolean;
+  leftIcon?: string;
 }
 
 export const Input: React.FC<InputProps> = ({
   label,
   error,
   required,
+  leftIcon,
   style,
   ...props
 }) => {
   return (
-    <View style={styles.container}>
-      {label && (
-        <Text style={styles.label}>
-          {label}
-          {required && <Text style={styles.required}> *</Text>}
-        </Text>
-      )}
+    <View style={styles.wrapper}>
       <TextInput
-        style={[
-          styles.input,
-          error && styles.inputError,
-          style,
-        ]}
-        placeholderTextColor={colors.text.disabled}
+        mode="outlined"
+        label={label ? `${label}${required ? ' *' : ''}` : undefined}
+        error={!!error}
+        left={leftIcon ? <TextInput.Icon icon={leftIcon} /> : undefined}
+        style={[styles.input, style]}
+        outlineColor={colors.border}
+        activeOutlineColor={colors.primary}
         {...props}
       />
-      {error && <Text style={styles.error}>{error}</Text>}
+      {error && (
+        <HelperText type="error" visible={!!error}>
+          {error}
+        </HelperText>
+      )}
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
+  wrapper: {
     marginBottom: spacing.md,
   },
-  label: {
-    fontSize: 14,
-    color: colors.text.primary,
-    marginBottom: spacing.xs,
-    fontWeight: '500',
-  },
-  required: {
-    color: colors.error,
-  },
   input: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: borderRadius.sm,
-    paddingHorizontal: spacing.sm + 4,
-    paddingVertical: spacing.sm + 4,
-    fontSize: 14,
-    color: colors.text.primary,
     backgroundColor: colors.white,
   },
-  inputError: {
-    borderColor: colors.error,
-  },
   error: {
-    fontSize: 12,
     color: colors.error,
+    fontSize: 12,
     marginTop: spacing.xs,
   },
 });
+
+export default Input;

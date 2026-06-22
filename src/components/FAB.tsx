@@ -1,45 +1,32 @@
 import React from 'react';
-import { TouchableOpacity, Text, StyleSheet, ViewStyle } from 'react-native';
-import { colors } from '../theme';
+import { FAB as PaperFAB } from 'react-native-paper';
+import { StyleSheet } from 'react-native';
 
 interface FABProps {
   onPress: () => void;
   icon?: string;
-  style?: ViewStyle;
+  style?: any;
+  elevation?: number;
 }
 
-export const FAB: React.FC<FABProps> = ({ onPress, icon = '+', style }) => {
+export const FAB: React.FC<FABProps> = ({ onPress, icon = 'plus', style, elevation }) => {
   return (
-    <TouchableOpacity
-      style={[styles.fab, style]}
+    <PaperFAB
+      icon={icon}
       onPress={onPress}
-      activeOpacity={0.8}
-    >
-      <Text style={styles.icon}>{icon}</Text>
-    </TouchableOpacity>
+      elevation={elevation}
+      style={[styles.fab, style]}
+    />
   );
 };
 
 const styles = StyleSheet.create({
   fab: {
     position: 'absolute',
-    right: 20,
-    bottom: 20,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 6,
-    shadowColor: colors.black,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-  },
-  icon: {
-    fontSize: 28,
-    color: colors.white,
-    fontWeight: 'bold',
+    margin: 16,
+    right: 0,
+    bottom: 0,
   },
 });
+
+export default FAB;

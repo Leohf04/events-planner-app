@@ -1,13 +1,6 @@
 import React from 'react';
-import {
-  TouchableOpacity,
-  Text,
-  StyleSheet,
-  ActivityIndicator,
-  ViewStyle,
-  TextStyle,
-} from 'react-native';
-import { colors, borderRadius, spacing } from '../theme';
+import { Button as PaperButton } from 'react-native-paper';
+import { colors } from '../theme';
 
 interface ButtonProps {
   title: string;
@@ -15,8 +8,8 @@ interface ButtonProps {
   variant?: 'primary' | 'secondary' | 'danger' | 'outline';
   loading?: boolean;
   disabled?: boolean;
-  style?: ViewStyle;
-  textStyle?: TextStyle;
+  icon?: string;
+  style?: any;
 }
 
 export const Button: React.FC<ButtonProps> = ({
@@ -25,78 +18,41 @@ export const Button: React.FC<ButtonProps> = ({
   variant = 'primary',
   loading = false,
   disabled = false,
+  icon,
   style,
-  textStyle,
 }) => {
-  const getBackgroundColor = () => {
-    if (disabled) return colors.border;
+  const getMode = (): 'contained' | 'outlined' | 'text' => {
     switch (variant) {
-      case 'primary':
-        return colors.primary;
-      case 'secondary':
-        return colors.background.component;
-      case 'danger':
-        return colors.error;
-      case 'outline':
-        return 'transparent';
-      default:
-        return colors.primary;
+      case 'primary': return 'contained';
+      case 'secondary': return 'contained';
+      case 'danger': return 'contained';
+      case 'outline': return 'outlined';
+      default: return 'contained';
     }
   };
 
-  const getTextColor = () => {
-    if (disabled) return colors.text.disabled;
+  const getColor = () => {
     switch (variant) {
-      case 'primary':
-      case 'danger':
-        return colors.white;
-      case 'secondary':
-        return colors.text.primary;
-      case 'outline':
-        return colors.primary;
-      default:
-        return colors.white;
+      case 'danger': return { buttonColor: colors.error };
+      case 'secondary': return { buttonColor: colors.background.component };
+      default: return {};
     }
   };
 
   return (
-    <TouchableOpacity
-      style={[
-        styles.button,
-        { backgroundColor: getBackgroundColor() },
-        variant === 'outline' && styles.outline,
-        style,
-      ]}
+    <PaperButton
+      mode={getMode()}
       onPress={onPress}
-      disabled={disabled || loading}
-      activeOpacity={0.7}
+      loading={loading}
+      disabled={disabled}
+      icon={icon}
+      style={style}
+      contentStyle={{ paddingVertical: 4 }}
+      {...getColor()}
     >
-      {loading ? (
-        <ActivityIndicator color={getTextColor()} />
-      ) : (
-        <Text style={[styles.text, { color: getTextColor() }, textStyle]}>
-          {title}
-        </Text>
-      )}
-    </TouchableOpacity>
+      {title}
+    </PaperButton>
   );
 };
 
-const styles = StyleSheet.create({
-  button: {
-    paddingVertical: spacing.sm + 2,
-    paddingHorizontal: spacing.md,
-    borderRadius: borderRadius.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 40,
-  },
-  text: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  outline: {
-    borderWidth: 1,
-    borderColor: colors.primary,
-  },
-});
+export default Button;

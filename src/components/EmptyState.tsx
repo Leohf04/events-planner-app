@@ -1,22 +1,25 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
+import { Text, Icon } from 'react-native-paper';
 import { colors, spacing } from '../theme';
 import { Button } from './Button';
 
 interface EmptyStateProps {
   message: string;
+  icon?: string;
   actionLabel?: string;
   onAction?: () => void;
 }
 
 export const EmptyState: React.FC<EmptyStateProps> = ({
   message,
+  icon = 'inbox-outline',
   actionLabel,
   onAction,
 }) => {
   return (
     <View style={styles.container}>
-      <Text style={styles.icon}>📋</Text>
+      <Icon source={icon} size={64} color={colors.text.disabled} />
       <Text style={styles.message}>{message}</Text>
       {actionLabel && onAction && (
         <Button
@@ -36,17 +39,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: spacing.xl,
   },
-  icon: {
-    fontSize: 48,
-    marginBottom: spacing.md,
-  },
   message: {
     fontSize: 16,
     color: colors.text.secondary,
     textAlign: 'center',
+    marginTop: spacing.md,
     marginBottom: spacing.md,
   },
   button: {
     minWidth: 150,
   },
 });
+
+export default EmptyState;

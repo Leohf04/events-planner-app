@@ -1,23 +1,26 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   ScrollView,
   StyleSheet,
-  Alert,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { Button } from 'react-native-paper';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Button, Input, Header } from '../../components';
+import { Input, Header } from '../../components';
 import { colors, spacing } from '../../theme';
-import api from '../../services/api';
-import { Cliente } from './ClientesListScreen';
+import {
+  saveCliente,
+  updateCliente,
+  getClienteById,
+} from '../../database/repositories/clientesRepository';
+import { useAlert } from '../../components/AlertDialog';
 
 type ClientesStackParamList = {
   ClientesList: undefined;
-  ClienteForm: { cliente?: Cliente };
-  ClienteDetail: { cliente: Cliente };
+  ClienteForm: { clienteId?: number };
 };
 
 interface FormData {
@@ -40,21 +43,47 @@ interface FormErrors {
 export const ClienteFormScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<ClientesStackParamList>>();
   const route = useRoute<RouteProp<ClientesStackParamList, 'ClienteForm'>>();
-  const cliente = route.params?.cliente;
-  const isEditing = !!cliente;
+  const { clienteId } = route.params || {};
+  const isEditing = !!clienteId;
 
   const [formData, setFormData] = useState<FormData>({
-    nombre: cliente?.nombre || '',
-    primerApellido: cliente?.primerApellido || '',
-    segundoApellido: cliente?.segundoApellido || '',
-    carnetIdentidad: cliente?.carnetIdentidad || '',
-    gmail: cliente?.gmail || '',
-    direccion: cliente?.direccion || '',
-    telefono: cliente?.telefono || '',
+    nombre: '',
+    primerApellido: '',
+    segundoApellido: '',
+    carnetIdentidad: '',
+    gmail: '',
+    direccion: '',
+    telefono: '',
   });
 
   const [errors, setErrors] = useState<FormErrors>({});
   const [loading, setLoading] = useState(false);
+  const alert = useAlert();
+
+  useEffect(() => {
+    if (clienteId) {
+      loadCliente();
+    }
+  }, [clienteId]);
+
+  const loadCliente = async () => {
+    try {
+      const clienteData = await getClienteById(clienteId!);
+      if (clienteData) {
+        setFormData({
+          nombre: clienteData.nombre,
+          primerApellido: clienteData.primerApellido,
+          segundoApellido: clienteData.segundoApellido || '',
+          carnetIdentidad: clienteData.carnetIdentidad || '',
+          gmail: clienteData.gmail || '',
+          direccion: clienteData.direccion || '',
+          telefono: clienteData.telefono || '',
+        });
+      }
+    } catch (error) {
+      alert.showAlert({ title: 'Error', message: 'No se pudo cargar el cliente' });
+    }
+  };
 
   const updateField = (field: keyof FormData, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -91,15 +120,15 @@ export const ClienteFormScreen: React.FC = () => {
     setLoading(true);
     try {
       if (isEditing) {
-        await api.put(`/clientes/${cliente.id}`, formData);
-        Alert.alert('Éxito', 'Cliente actualizado correctamente');
+        await updateCliente(clienteId!, formData);
+        alert.showAlert({ title: 'Éxito', message: 'Cliente actualizado correctamente' });
       } else {
-        await api.post('/clientes', formData);
-        Alert.alert('Éxito', 'Cliente creado correctamente');
+        await saveCliente(formData);
+        alert.showAlert({ title: 'Éxito', message: 'Cliente creado correctamente' });
       }
       navigation.goBack();
     } catch (error) {
-      Alert.alert('Error', 'No se pudo guardar el cliente');
+      alert.showAlert({ title: 'Error', message: 'No se pudo guardar el cliente' });
     } finally {
       setLoading(false);
     }
@@ -109,10 +138,8 @@ export const ClienteFormScreen: React.FC = () => {
     <View style={styles.container}>
       <Header
         title={isEditing ? 'Editar Cliente' : 'Nuevo Cliente'}
-        leftAction={{
-          icon: '←',
-          onPress: () => navigation.goBack(),
-        }}
+        showBack
+        onBack={() => navigation.goBack()}
       />
 
       <KeyboardAvoidingView
@@ -128,76 +155,75 @@ export const ClienteFormScreen: React.FC = () => {
             label="Nombre"
             placeholder="Nombre del cliente"
             value={formData.nombre}
-            onChangeText={(v) => updateField('nombre', v)}
+            onChangeText={(value) => updateField('nombre', value)}
             error={errors.nombre}
-            required
+            leftIcon="account-outline"
           />
 
           <Input
             label="Primer Apellido"
             placeholder="Primer apellido"
             value={formData.primerApellido}
-            onChangeText={(v) => updateField('primerApellido', v)}
+            onChangeText={(value) => updateField('primerApellido', value)}
             error={errors.primerApellido}
-            required
           />
 
           <Input
             label="Segundo Apellido"
-            placeholder="Segundo apellido (opcional)"
+            placeholder="Segundo apellido"
             value={formData.segundoApellido}
-            onChangeText={(v) => updateField('segundoApellido', v)}
+            onChangeText={(value) => updateField('segundoApellido', value)}
           />
 
           <Input
             label="Carnet de Identidad"
-            placeholder="Número de carnet"
+            placeholder="Número de identidad"
             value={formData.carnetIdentidad}
-            onChangeText={(v) => updateField('carnetIdentidad', v)}
+            onChangeText={(value) => updateField('carnetIdentidad', value)}
             error={errors.carnetIdentidad}
-            required
+            leftIcon="card-account-details-outline"
           />
 
           <Input
             label="Correo Electrónico"
             placeholder="correo@ejemplo.com"
             value={formData.gmail}
-            onChangeText={(v) => updateField('gmail', v)}
+            onChangeText={(value) => updateField('gmail', value)}
             error={errors.gmail}
+            leftIcon="email-outline"
             keyboardType="email-address"
             autoCapitalize="none"
-            required
-          />
-
-          <Input
-            label="Dirección"
-            placeholder="Dirección (opcional)"
-            value={formData.direccion}
-            onChangeText={(v) => updateField('direccion', v)}
           />
 
           <Input
             label="Teléfono"
-            placeholder="Número de teléfono (opcional)"
+            placeholder="+53 555 555 555"
             value={formData.telefono}
-            onChangeText={(v) => updateField('telefono', v)}
+            onChangeText={(value) => updateField('telefono', value)}
+            leftIcon="phone-outline"
             keyboardType="phone-pad"
           />
 
-          <View style={styles.buttons}>
-            <Button
-              title="Cancelar"
-              variant="outline"
-              onPress={() => navigation.goBack()}
-              style={styles.button}
-            />
-            <Button
-              title={isEditing ? 'Actualizar' : 'Crear'}
-              onPress={handleSubmit}
-              loading={loading}
-              style={styles.button}
-            />
-          </View>
+          <Input
+            label="Dirección"
+            placeholder="Dirección del cliente"
+            value={formData.direccion}
+            onChangeText={(value) => updateField('direccion', value)}
+            leftIcon="map-marker-outline"
+            multiline
+            numberOfLines={3}
+          />
+
+          <Button
+            mode="contained"
+            onPress={handleSubmit}
+            loading={loading}
+            icon={isEditing ? 'content-save' : 'plus-circle-outline'}
+            style={styles.button}
+            contentStyle={{ paddingVertical: 6 }}
+          >
+            {isEditing ? 'Actualizar Cliente' : 'Crear Cliente'}
+          </Button>
         </ScrollView>
       </KeyboardAvoidingView>
     </View>
@@ -215,12 +241,9 @@ const styles = StyleSheet.create({
   content: {
     padding: spacing.md,
   },
-  buttons: {
-    flexDirection: 'row',
-    gap: spacing.sm,
+  button: {
     marginTop: spacing.lg,
   },
-  button: {
-    flex: 1,
-  },
 });
+
+export default ClienteFormScreen;

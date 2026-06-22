@@ -1,152 +1,199 @@
 import React, { useState, useEffect } from 'react';
 import {
   View,
-  Text,
-  StyleSheet,
   ScrollView,
-  Alert,
+  StyleSheet,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { Button, Text, IconButton, Divider } from 'react-native-paper';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Button, Input, Header, Select } from '../../components';
+import { Input, Select, Header } from '../../components';
 import { colors, spacing } from '../../theme';
-import { 
-  saveFactura, 
-  updateFactura, 
-  getFacturaById, 
-  getClientes, 
-  getArticulos, 
-  Cliente, 
-  Articulo 
-} from '../../services/storageService';
-import { FORMAS_PAGO } from '../../utils/constants';
+import { getClientes, ClienteRow } from '../../database/repositories/clientesRepository';
+import { getArticulos, getArticuloById, ArticuloRow, registrarMovimientoStock } from '../../database/repositories/articulosRepository';
+import { getMonedas, MonedaRow } from '../../database/repositories/monedasRepository';
+import { saveFactura, getFacturaById, getFacturaArticulos } from '../../database/repositories/facturasRepository';
+import { getEmpresa } from '../../database/repositories/empresaRepository';
+import { formatCurrency } from '../../utils/helpers';
+import { useAlert } from '../../components/AlertDialog';
 
 type FacturasStackParamList = {
   FacturasList: undefined;
-  FacturaForm: { facturaId?: string };
+  FacturaForm: { facturaId?: number };
+  FacturaDetail: { facturaId: number };
 };
+
+interface LineItem {
+  idArticulo: number | null;
+  cantidad: number;
+  precio_unitario: number;
+  nombre: string;
+}
 
 export const FacturaFormScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<FacturasStackParamList>>();
   const route = useRoute<RouteProp<FacturasStackParamList, 'FacturaForm'>>();
   const { facturaId } = route.params || {};
-  
-  const [loading, setLoading] = useState(false);
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  
-  const [clientes, setClientes] = useState<Cliente[]>([]);
-  const [articulos, setArticulos] = useState<Articulo[]>([]);
-  
-  const [id_cliente, setIdCliente] = useState('');
-  const [id_articulo, setIdArticulo] = useState('');
-  const [cantidad, setCantidad] = useState('1');
-  const [impuesto, setImpuesto] = useState('0');
-  const [formaPago, setFormaPago] = useState('efectivo');
-  const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0]);
+  const isEditing = !!facturaId;
 
-  const [subTotal, setSubTotal] = useState(0);
-  const [total, setTotal] = useState(0);
+  const [clientes, setClientes] = useState<ClienteRow[]>([]);
+  const [articulos, setArticulos] = useState<ArticuloRow[]>([]);
+  const [monedas, setMonedas] = useState<MonedaRow[]>([]);
+  const [idCliente, setIdCliente] = useState<number | null>(null);
+  const [idMoneda, setIdMoneda] = useState<number | null>(null);
+  const [formaPago, setFormaPago] = useState('efectivo');
+  const [lineItems, setLineItems] = useState<LineItem[]>([
+    { idArticulo: null, cantidad: 1, precio_unitario: 0, nombre: '' },
+  ]);
+  const [loading, setLoading] = useState(false);
+  const [impuestoPorc, setImpuestoPorc] = useState(10);
+  const alert = useAlert();
 
   useEffect(() => {
-    loadData();
+    const loadInitialData = async () => {
+      setClientes(await getClientes());
+      setArticulos(await getArticulos());
+      setMonedas(await getMonedas());
+      const empresa = await getEmpresa();
+      if (empresa) setImpuestoPorc(empresa.impuesto);
+    };
+    loadInitialData();
+
     if (facturaId) {
       loadFactura();
     }
   }, [facturaId]);
-
-  useEffect(() => {
-    calculateTotals();
-  }, [id_articulo, cantidad, impuesto]);
-
-  const loadData = async () => {
-    try {
-      const [clientesData, articulosData] = await Promise.all([
-        getClientes(),
-        getArticulos(),
-      ]);
-      setClientes(clientesData);
-      setArticulos(articulosData);
-    } catch (error) {
-      Alert.alert('Error', 'No se pudieron cargar los datos');
-    }
-  };
 
   const loadFactura = async () => {
     try {
       const factura = await getFacturaById(facturaId!);
       if (factura) {
         setIdCliente(factura.id_cliente);
-        setIdArticulo(factura.id_articulo);
-        setCantidad(factura.cantidad.toString());
-        setImpuesto(factura.impuesto.toString());
+        setIdMoneda(factura.id_moneda);
         setFormaPago(factura.formaPago);
-        setFecha(factura.fecha);
+
+        const items = await getFacturaArticulos(facturaId!);
+        setLineItems(
+          items.map((item) => ({
+            idArticulo: item.idArticulo,
+            cantidad: item.cantidad,
+            precio_unitario: item.precio_unitario,
+            nombre: item.nombre,
+          }))
+        );
       }
     } catch (error) {
-      Alert.alert('Error', 'No se pudo cargar la factura');
+      alert.showAlert({ title: 'Error', message: 'No se pudo cargar la factura' });
     }
   };
 
-  const calculateTotals = () => {
-    const articulo = articulos.find(a => a.id === id_articulo);
-    const cant = parseInt(cantidad) || 0;
-    const imp = parseFloat(impuesto) || 0;
-    
-    if (articulo) {
-      const sub = articulo.precio * cant;
-      setSubTotal(sub);
-      setTotal(sub + imp);
-    }
+  const addLineItem = () => {
+    setLineItems([...lineItems, { idArticulo: null, cantidad: 1, precio_unitario: 0, nombre: '' }]);
   };
 
-  const validate = (): boolean => {
-    const newErrors: Record<string, string> = {};
-    
-    if (!id_cliente) {
-      newErrors.id_cliente = 'Seleccione un cliente';
+  const removeLineItem = (index: number) => {
+    if (lineItems.length === 1) return;
+    setLineItems(lineItems.filter((_, i) => i !== index));
+  };
+
+  const updateLineItem = (index: number, field: keyof LineItem, value: any) => {
+    const items = [...lineItems];
+    items[index] = { ...items[index], [field]: value };
+
+    if (field === 'idArticulo' && value) {
+      const articulo = articulos.find(a => a.id === value);
+      if (articulo) {
+        items[index].precio_unitario = articulo.precio_venta;
+        items[index].nombre = articulo.nombre;
+      }
     }
-    if (!id_articulo) {
-      newErrors.id_articulo = 'Seleccione un artículo';
-    }
-    if (!cantidad || parseInt(cantidad) <= 0) {
-      newErrors.cantidad = 'La cantidad debe ser mayor a 0';
-    }
-    
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+
+    setLineItems(items);
+  };
+
+  const calcularSubtotal = (): number => {
+    return lineItems.reduce((sum, item) => sum + (item.cantidad * item.precio_unitario), 0);
+  };
+
+  const calcularImpuesto = (): number => {
+    return calcularSubtotal() * (impuestoPorc / 100);
+  };
+
+  const calcularTotal = (): number => {
+    return calcularSubtotal() + calcularImpuesto();
   };
 
   const handleSave = async () => {
-    if (!validate()) return;
+    if (!idCliente) {
+      alert.showAlert({ title: 'Error', message: 'Seleccione un cliente' });
+      return;
+    }
+    if (lineItems.length === 0 || !lineItems[0].idArticulo) {
+      alert.showAlert({ title: 'Error', message: 'Agregue al menos un artículo' });
+      return;
+    }
 
     setLoading(true);
     try {
-      const facturaData = {
-        id_cliente,
-        id_articulo,
-        cantidad: parseInt(cantidad),
-        sub_total: subTotal,
-        impuesto: parseFloat(impuesto) || 0,
-        total,
-        fecha,
-        formaPago,
-      };
+      const subTotal = calcularSubtotal();
+      const impuesto = calcularImpuesto();
+      const total = calcularTotal();
 
-      if (facturaId) {
-        await updateFactura(facturaId, facturaData);
-      } else {
-        await saveFactura(facturaData);
+      for (const item of lineItems) {
+        if (item.idArticulo) {
+          const articulo = await getArticuloById(item.idArticulo);
+          if (articulo && articulo.stock < item.cantidad) {
+            alert.showAlert({ title: 'Stock insuficiente', message: `${articulo.nombre}: disponible ${articulo.stock}, requerido ${item.cantidad}` });
+            setLoading(false);
+            return;
+          }
+        }
       }
-      
-      navigation.goBack();
-    } catch (error) {
-      Alert.alert('Error', 'No se pudo guardar la factura');
+
+      await saveFactura(
+        {
+          codigoFactura: `F-${Date.now()}`,
+          id_cliente: idCliente,
+          fecha: new Date().toISOString(),
+          subTotal,
+          impuesto,
+          total,
+          id_moneda: idMoneda,
+          formaPago,
+        },
+        lineItems.map((item) => ({
+          idArticulo: item.idArticulo!,
+          cantidad: item.cantidad,
+          precio_unitario: item.precio_unitario,
+        }))
+      );
+
+      for (const item of lineItems) {
+        if (item.idArticulo) {
+          await registrarMovimientoStock(item.idArticulo, 'salida', item.cantidad);
+        }
+      }
+
+      alert.showAlert({
+        title: 'Éxito',
+        message: 'Factura creada correctamente',
+        buttons: [
+          { text: 'OK', onPress: () => navigation.goBack() },
+        ]
+      });
+    } catch (error: any) {
+      alert.showAlert({ title: 'Error', message: error.message || 'No se pudo guardar la factura' });
     } finally {
       setLoading(false);
     }
   };
+
+  const monedaOptions = monedas.map(m => ({
+    label: `${m.nombre} (${m.simbolo})`,
+    value: m.id,
+  }));
 
   const clienteOptions = clientes.map(c => ({
     label: `${c.nombre} ${c.primerApellido}`,
@@ -154,95 +201,141 @@ export const FacturaFormScreen: React.FC = () => {
   }));
 
   const articuloOptions = articulos.map(a => ({
-    label: `${a.nombre} - $${a.precio.toFixed(2)}`,
+    label: `${a.nombre} - ${formatCurrency(a.precio_venta)}`,
     value: a.id,
   }));
 
-  const selectedArticulo = articulos.find(a => a.id === id_articulo);
+  const formasPago = [
+    { label: 'Efectivo', value: 'efectivo' },
+    { label: 'Transferencia', value: 'transferencia' },
+    { label: 'Zelle', value: 'zelle' },
+  ];
 
   return (
     <View style={styles.container}>
       <Header
-        title={facturaId ? 'Editar Factura' : 'Nueva Factura'}
+        title={isEditing ? 'Editar Factura' : 'Nueva Factura'}
         showBack
         onBack={() => navigation.goBack()}
       />
-      
+
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <ScrollView contentContainerStyle={styles.form}>
+        <ScrollView
+          style={styles.flex}
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+        >
           <Select
             label="Cliente"
-            placeholder="Seleccione un cliente"
-            value={id_cliente}
+            placeholder="Seleccionar cliente"
+            value={idCliente || ''}
             options={clienteOptions}
-            onChange={setIdCliente}
-            error={errors.id_cliente}
+            onChange={(value) => setIdCliente(value as number)}
           />
 
           <Select
-            label="Artículo"
-            placeholder="Seleccione un artículo"
-            value={id_articulo}
-            options={articuloOptions}
-            onChange={setIdArticulo}
-            error={errors.id_articulo}
-          />
-
-          {selectedArticulo && (
-            <View style={styles.infoBox}>
-              <Text style={styles.infoText}>Precio unitario: ${selectedArticulo.precio.toFixed(2)}</Text>
-              <Text style={styles.infoText}>Stock disponible: {selectedArticulo.stock}</Text>
-            </View>
-          )}
-
-          <Input
-            label="Cantidad"
-            placeholder="1"
-            value={cantidad}
-            onChangeText={setCantidad}
-            error={errors.cantidad}
-            keyboardType="number-pad"
-          />
-
-          <Input
-            label="Impuesto"
-            placeholder="0.00"
-            value={impuesto}
-            onChangeText={setImpuesto}
-            keyboardType="decimal-pad"
+            label="Moneda"
+            placeholder="Seleccionar moneda"
+            value={idMoneda || ''}
+            options={monedaOptions}
+            onChange={(value) => setIdMoneda(value as number)}
           />
 
           <Select
             label="Forma de Pago"
             value={formaPago}
-            options={FORMAS_PAGO}
-            onChange={setFormaPago}
+            options={formasPago}
+            onChange={(value) => setFormaPago(value as string)}
           />
+
+          <Divider style={styles.divider} />
+
+          <View style={styles.sectionHeader}>
+            <Text variant="titleSmall" style={styles.sectionTitle}>
+              Artículos
+            </Text>
+            <IconButton icon="plus-circle-outline" onPress={addLineItem} />
+          </View>
+
+          {lineItems.map((item, index) => (
+            <View key={index} style={styles.lineItem}>
+              <View style={styles.lineItemHeader}>
+                <Text variant="bodySmall" style={styles.lineItemNumber}>
+                  #{index + 1}
+                </Text>
+                {lineItems.length > 1 && (
+                  <IconButton
+                    icon="close-circle-outline"
+                    size={20}
+                    onPress={() => removeLineItem(index)}
+                  />
+                )}
+              </View>
+              <Select
+                placeholder="Seleccionar artículo"
+                value={item.idArticulo || ''}
+                options={articuloOptions}
+                onChange={(value) => updateLineItem(index, 'idArticulo', value as number)}
+              />
+              <View style={styles.lineItemRow}>
+                <Input
+                  label="Cant."
+                  value={item.cantidad.toString()}
+                  onChangeText={(value) => updateLineItem(index, 'cantidad', parseInt(value) || 0)}
+                  keyboardType="number-pad"
+                  style={styles.cantidadInput}
+                />
+                <Input
+                  label="Precio Unit."
+                  value={item.precio_unitario.toString()}
+                  onChangeText={(value) => updateLineItem(index, 'precio_unitario', parseFloat(value) || 0)}
+                  keyboardType="decimal-pad"
+                  style={styles.precioInput}
+                />
+                <View style={styles.subtotalContainer}>
+                  <Text variant="bodySmall" style={styles.subtotalLabel}>
+                    Subtotal:
+                  </Text>
+                  <Text variant="bodyMedium" style={styles.subtotalValue}>
+                    {formatCurrency(item.cantidad * item.precio_unitario)}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          ))}
+
+          <Divider style={styles.totalDivider} />
 
           <View style={styles.totals}>
             <View style={styles.totalRow}>
-              <Text style={styles.totalLabel}>Subtotal:</Text>
-              <Text style={styles.totalValue}>${subTotal.toFixed(2)}</Text>
+              <Text>Subtotal:</Text>
+              <Text style={styles.totalAmount}>{formatCurrency(calcularSubtotal())}</Text>
             </View>
             <View style={styles.totalRow}>
-              <Text style={styles.totalLabel}>Impuesto:</Text>
-              <Text style={styles.totalValue}>${parseFloat(impuesto || '0').toFixed(2)}</Text>
+              <Text>Impuesto ({impuestoPorc}%):</Text>
+              <Text style={styles.totalAmount}>{formatCurrency(calcularImpuesto())}</Text>
             </View>
-            <View style={[styles.totalRow, styles.totalFinal]}>
-              <Text style={styles.totalLabelFinal}>Total:</Text>
-              <Text style={styles.totalValueFinal}>${total.toFixed(2)}</Text>
+            <View style={styles.totalFinalRow}>
+              <Text variant="titleMedium" style={styles.totalLabel}>Total:</Text>
+              <Text variant="titleMedium" style={styles.totalFinalAmount}>
+                {formatCurrency(calcularTotal())}
+              </Text>
             </View>
           </View>
 
           <Button
-            title={facturaId ? 'Actualizar' : 'Crear Factura'}
+            mode="contained"
             onPress={handleSave}
             loading={loading}
+            icon="content-save"
             style={styles.button}
-          />
+            contentStyle={{ paddingVertical: 6 }}
+          >
+            {isEditing ? 'Actualizar Factura' : 'Crear Factura'}
+          </Button>
         </ScrollView>
       </KeyboardAvoidingView>
     </View>
@@ -257,55 +350,96 @@ const styles = StyleSheet.create({
   flex: {
     flex: 1,
   },
-  form: {
+  content: {
     padding: spacing.md,
   },
-  infoBox: {
-    backgroundColor: colors.primary + '15',
-    padding: spacing.md,
+  divider: {
+    marginVertical: spacing.md,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  sectionTitle: {
+    fontWeight: 'bold',
+    color: colors.text.primary,
+  },
+  lineItem: {
+    backgroundColor: colors.white,
     borderRadius: 8,
-    marginBottom: spacing.md,
+    padding: spacing.sm,
+    marginBottom: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  infoText: {
-    fontSize: 14,
+  lineItemHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  lineItemNumber: {
+    color: colors.text.secondary,
+    fontWeight: '600',
+  },
+  lineItemRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+  },
+  cantidadInput: {
+    flex: 1,
+  },
+  precioInput: {
+    flex: 2,
+  },
+  subtotalContainer: {
+    flex: 2,
+    paddingTop: spacing.md + 4,
+  },
+  subtotalLabel: {
+    color: colors.text.secondary,
+  },
+  subtotalValue: {
+    fontWeight: '600',
     color: colors.primary,
   },
+  totalDivider: {
+    marginVertical: spacing.md,
+  },
   totals: {
-    backgroundColor: colors.background.component,
-    padding: spacing.md,
+    backgroundColor: colors.white,
     borderRadius: 8,
-    marginTop: spacing.md,
+    padding: spacing.md,
+    marginBottom: spacing.md,
   },
   totalRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: spacing.xs,
   },
-  totalLabel: {
-    fontSize: 14,
-    color: colors.text.secondary,
+  totalAmount: {
+    fontWeight: '500',
   },
-  totalValue: {
-    fontSize: 14,
-    color: colors.text.primary,
-  },
-  totalFinal: {
+  totalFinalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     borderTopWidth: 1,
     borderTopColor: colors.border,
     paddingTop: spacing.sm,
-    marginTop: spacing.sm,
+    marginTop: spacing.xs,
   },
-  totalLabelFinal: {
-    fontSize: 18,
+  totalLabel: {
     fontWeight: 'bold',
     color: colors.text.primary,
   },
-  totalValueFinal: {
-    fontSize: 18,
+  totalFinalAmount: {
     fontWeight: 'bold',
     color: colors.primary,
   },
   button: {
-    marginTop: spacing.lg,
+    marginTop: spacing.md,
   },
 });
+
+export default FacturaFormScreen;

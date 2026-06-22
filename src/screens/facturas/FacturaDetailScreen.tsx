@@ -1,43 +1,46 @@
 import React, { useState, useEffect } from 'react';
 import {
   View,
-  Text,
-  StyleSheet,
   ScrollView,
-  Alert,
-  TouchableOpacity,
+  StyleSheet,
+  Linking,
+  Platform,
 } from 'react-native';
+import { Text, Button, Divider, Chip } from 'react-native-paper';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Button, Header, Loading, Card } from '../../components';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as IntentLauncher from 'expo-intent-launcher';
+import { Header, Loading } from '../../components';
 import { colors, spacing } from '../../theme';
-import { 
-  getFacturaById, 
-  getClienteById, 
-  getArticuloById,
-  Factura,
-  Cliente,
-  Articulo 
-} from '../../services/storageService';
-import { formatCurrency, formatDate, formatDateTime } from '../../utils/helpers';
-import api from '../../services/api';
+import { getFacturaById, getFacturaArticulos, FacturaRow } from '../../database/repositories/facturasRepository';
+import { getClienteById, ClienteRow } from '../../database/repositories/clientesRepository';
+import { getMonedaById, MonedaRow } from '../../database/repositories/monedasRepository';
+import { getEmpresa } from '../../database/repositories/empresaRepository';
+import { formatCurrency, formatDateTime } from '../../utils/helpers';
+import { guardarPdf, compartirPdf } from '../../services/envioService';
+import { useAlert } from '../../components/AlertDialog';
 
 type FacturasStackParamList = {
   FacturasList: undefined;
-  FacturaForm: { facturaId?: string };
-  FacturaDetail: { facturaId: string };
+  FacturaForm: { facturaId?: number };
+  FacturaDetail: { facturaId: number };
 };
 
 export const FacturaDetailScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<FacturasStackParamList>>();
   const route = useRoute<RouteProp<FacturasStackParamList, 'FacturaDetail'>>();
   const { facturaId } = route.params;
-  
+
+  const [factura, setFactura] = useState<FacturaRow | null>(null);
+  const [cliente, setCliente] = useState<ClienteRow | null>(null);
+  const [moneda, setMoneda] = useState<MonedaRow | null>(null);
+  const [articulos, setArticulos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [sending, setSending] = useState(false);
-  const [factura, setFactura] = useState<Factura | null>(null);
-  const [cliente, setCliente] = useState<Cliente | null>(null);
-  const [articulo, setArticulo] = useState<Articulo | null>(null);
+  const [loadingPdf, setLoadingPdf] = useState(false);
+  const [loadingShare, setLoadingShare] = useState(false);
+  const [loadingPreview, setLoadingPreview] = useState(false);
+  const alert = useAlert();
 
   useEffect(() => {
     loadData();
@@ -45,155 +48,207 @@ export const FacturaDetailScreen: React.FC = () => {
 
   const loadData = async () => {
     try {
-      const [facturaData, clienteData, articuloData] = await Promise.all([
-        getFacturaById(facturaId),
-        getClienteById(facturaId),
-        getArticuloById(facturaId),
-      ]);
-      
-      setFactura(facturaData);
-      if (facturaData) {
-        const [clienteAux, articuloAux] = await Promise.all([
-          getClienteById(facturaData.id_cliente),
-          getArticuloById(facturaData.id_articulo),
-        ]);
-        setCliente(clienteAux);
-        setArticulo(articuloAux);
-      }
+      const f = await getFacturaById(facturaId);
+      if (!f) return;
+
+      setFactura(f);
+      setCliente(f.id_cliente ? await getClienteById(f.id_cliente) : null);
+      setMoneda(f.id_moneda ? await getMonedaById(f.id_moneda) : null);
+      setArticulos(await getFacturaArticulos(facturaId));
     } catch (error) {
-      Alert.alert('Error', 'No se pudieron cargar los datos');
+      alert.showAlert({ title: 'Error', message: 'No se pudo cargar la factura' });
     } finally {
       setLoading(false);
     }
   };
 
-  const handleEnviarEmail = async () => {
-    if (!cliente?.gmail) {
-      Alert.alert('Error', 'El cliente no tiene correo electrónico');
-      return;
-    }
+  const buildPdfData = async () => {
+    if (!factura) return null;
+    return {
+      factura,
+      cliente,
+      empresa: await getEmpresa(),
+      moneda,
+      clienteId: factura.id_cliente,
+      articulos,
+    };
+  };
 
-    setSending(true);
+  const handleGuardarPdf = async () => {
+    const data = await buildPdfData();
+    if (!data) return;
+    setLoadingPdf(true);
     try {
-      await api.post(`/facturas/${facturaId}/enviar`, {
-        email: cliente.gmail,
-      });
-      Alert.alert('Éxito', 'Factura enviada por correo electrónico');
-    } catch (error: any) {
-      const message = error.response?.data?.message || 'No se pudo enviar el correo';
-      Alert.alert('Error', message);
+      const uri = await guardarPdf(data as any);
+      alert.showAlert({ title: 'Éxito', message: `PDF guardado correctamente\n\n${uri}` });
+    } catch (error) {
+      alert.showAlert({ title: 'Error', message: 'No se pudo guardar el PDF' });
     } finally {
-      setSending(false);
+      setLoadingPdf(false);
     }
   };
 
-  const handleEditar = () => {
-    navigation.navigate('FacturaForm', { facturaId });
+  const handleVistaPrevia = async () => {
+    const data = await buildPdfData();
+    if (!data) return;
+    setLoadingPreview(true);
+    try {
+      const uri = await guardarPdf(data as any);
+      if (Platform.OS === 'android') {
+        const contentUri = await FileSystem.getContentUriAsync(uri);
+        await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
+          data: contentUri,
+          type: 'application/pdf',
+          flags: 268435457,
+        });
+      } else {
+        await Linking.openURL(uri);
+      }
+    } catch (error) {
+      alert.showAlert({ title: 'Error', message: 'No se pudo abrir la vista previa' });
+    } finally {
+      setLoadingPreview(false);
+    }
   };
 
-  if (loading) {
+  const handleCompartir = async () => {
+    const data = await buildPdfData();
+    if (!data) return;
+    setLoadingShare(true);
+    try {
+      await compartirPdf(data as any);
+    } catch (error: any) {
+      alert.showAlert({ title: 'Error', message: error.message });
+    } finally {
+      setLoadingShare(false);
+    }
+  };
+
+  if (loading || !factura) {
     return <Loading />;
   }
 
-  if (!factura) {
-    return (
-      <View style={styles.container}>
-        <Header
-          title="Factura"
-          showBack
-          onBack={() => navigation.goBack()}
-        />
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>Factura no encontrada</Text>
-        </View>
-      </View>
-    );
-  }
+  const simbolo = moneda?.simbolo || '$';
 
   return (
     <View style={styles.container}>
       <Header
-        title="Detalle de Factura"
+        title={`Factura ${factura.codigoFactura}`}
         showBack
         onBack={() => navigation.goBack()}
       />
-      
+
       <ScrollView contentContainerStyle={styles.content}>
-        <Card>
-          <View style={styles.header}>
-            <Text style={styles.codigo}>{factura.codigoFactura}</Text>
-            <Text style={styles.fecha}>{formatDate(factura.fecha)}</Text>
-          </View>
-        </Card>
+        <View style={styles.headerCard}>
+          <Text variant="headlineSmall" style={styles.codigo}>{factura.codigoFactura}</Text>
+          <Text variant="bodyMedium" style={styles.fecha}>{formatDateTime(factura.fecha)}</Text>
+          <Chip
+            icon={factura.formaPago === 'efectivo' ? 'cash' : factura.formaPago === 'zelle' ? 'bank-transfer' : 'bank'}
+            style={styles.pagoChip}
+          >
+            {factura.formaPago}
+          </Chip>
+        </View>
 
-        <Card>
-          <Text style={styles.sectionTitle}>Cliente</Text>
-          {cliente ? (
-            <View>
-              <Text style={styles.label}>
-                {cliente.nombre} {cliente.primerApellido} {cliente.segundoApellido}
+        {cliente && (
+          <View style={styles.section}>
+            <Text variant="titleSmall" style={styles.sectionTitle}>
+              Cliente
+            </Text>
+            <Text variant="bodyMedium">
+              {cliente.nombre} {cliente.primerApellido} {cliente.segundoApellido || ''}
+            </Text>
+            {cliente.carnetIdentidad && (
+              <Text variant="bodySmall" style={styles.infoText}>
+                CI: {cliente.carnetIdentidad}
               </Text>
-              <Text style={styles.detail}>CI: {cliente.carnetIdentidad}</Text>
-              {cliente.telefono && <Text style={styles.detail}>Tel: {cliente.telefono}</Text>}
-              {cliente.gmail && <Text style={styles.detail}>Email: {cliente.gmail}</Text>}
+            )}
+            {cliente.gmail && (
+              <Text variant="bodySmall" style={styles.infoText}>
+                {cliente.gmail}
+              </Text>
+            )}
+            {cliente.telefono && (
+              <Text variant="bodySmall" style={styles.infoText}>
+                {cliente.telefono}
+              </Text>
+            )}
+          </View>
+        )}
+
+        <Divider style={styles.divider} />
+
+        <Text variant="titleSmall" style={styles.sectionTitle}>
+          Artículos
+        </Text>
+        {articulos.map((art, index) => (
+          <View key={art.id} style={styles.articuloRow}>
+            <View style={styles.articuloInfo}>
+              <Text variant="bodyMedium" style={styles.articuloName}>
+                {art.nombre}
+              </Text>
+              <Text variant="bodySmall" style={styles.infoText}>
+                {art.cantidad} x {formatCurrency(art.precio_unitario, simbolo)}
+              </Text>
             </View>
-          ) : (
-            <Text style={styles.noData}>Cliente no encontrado</Text>
-          )}
-        </Card>
+            <Text variant="bodyMedium" style={styles.articuloSubtotal}>
+              {formatCurrency(art.cantidad * art.precio_unitario, simbolo)}
+            </Text>
+          </View>
+        ))}
 
-        <Card>
-          <Text style={styles.sectionTitle}>Artículo</Text>
-          {articulo ? (
-            <View>
-              <Text style={styles.label}>{articulo.nombre}</Text>
-              <Text style={styles.detail}>{articulo.descripcion}</Text>
-              <Text style={styles.detail}>Precio: {formatCurrency(articulo.precio)}</Text>
-            </View>
-          ) : (
-            <Text style={styles.noData}>Artículo no encontrado</Text>
-          )}
-        </Card>
+        <Divider style={styles.divider} />
 
-        <Card>
-          <Text style={styles.sectionTitle}>Detalles</Text>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Cantidad:</Text>
-            <Text style={styles.detailValue}>{factura.cantidad}</Text>
+        <View style={styles.totals}>
+          <View style={styles.totalRow}>
+            <Text>Subtotal:</Text>
+            <Text>{formatCurrency(factura.subTotal, simbolo)}</Text>
           </View>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Subtotal:</Text>
-            <Text style={styles.detailValue}>{formatCurrency(factura.sub_total)}</Text>
+          <View style={styles.totalRow}>
+            <Text>Impuesto:</Text>
+            <Text>{formatCurrency(factura.impuesto, simbolo)}</Text>
           </View>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Impuesto:</Text>
-            <Text style={styles.detailValue}>{formatCurrency(factura.impuesto)}</Text>
+          <View style={styles.totalFinalRow}>
+            <Text variant="titleMedium" style={styles.totalLabel}>Total:</Text>
+            <Text variant="titleMedium" style={styles.totalAmount}>
+              {formatCurrency(factura.total, simbolo)}
+            </Text>
           </View>
-          <View style={[styles.detailRow, styles.totalRow]}>
-            <Text style={styles.totalLabel}>Total:</Text>
-            <Text style={styles.totalValue}>{formatCurrency(factura.total)}</Text>
-          </View>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Forma de Pago:</Text>
-            <Text style={styles.detailValue}>{factura.formaPago}</Text>
-          </View>
-        </Card>
+        </View>
 
+        <Divider style={styles.divider} />
+
+        <Text variant="titleSmall" style={styles.sectionTitle}>
+          Acciones
+        </Text>
         <View style={styles.actions}>
           <Button
-            title="Editar Factura"
-            onPress={handleEditar}
-            variant="secondary"
-            style={styles.button}
-          />
-          
+            mode="outlined"
+            icon="download"
+            onPress={handleGuardarPdf}
+            loading={loadingPdf}
+            style={styles.actionButton}
+          >
+            Guardar PDF
+          </Button>
           <Button
-            title="📧 Enviar por Email"
-            onPress={handleEnviarEmail}
-            loading={sending}
-            disabled={!cliente?.gmail}
-            style={styles.button}
-          />
+            mode="outlined"
+            icon="file-eye-outline"
+            onPress={handleVistaPrevia}
+            loading={loadingPreview}
+            style={styles.actionButton}
+          >
+            Vista Previa
+          </Button>
+          <Button
+            mode="outlined"
+            icon="share-variant"
+            onPress={handleCompartir}
+            loading={loadingShare}
+            style={styles.actionButton}
+          >
+            Compartir
+          </Button>
         </View>
       </ScrollView>
     </View>
@@ -208,82 +263,98 @@ const styles = StyleSheet.create({
   content: {
     padding: spacing.md,
   },
-  header: {
+  headerCard: {
+    backgroundColor: colors.white,
+    borderRadius: 8,
+    padding: spacing.md,
     alignItems: 'center',
+    marginBottom: spacing.md,
   },
   codigo: {
-    fontSize: 24,
     fontWeight: 'bold',
     color: colors.primary,
   },
   fecha: {
-    fontSize: 14,
     color: colors.text.secondary,
     marginTop: spacing.xs,
   },
+  pagoChip: {
+    marginTop: spacing.sm,
+  },
+  section: {
+    backgroundColor: colors.white,
+    borderRadius: 8,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+  },
   sectionTitle: {
-    fontSize: 16,
     fontWeight: 'bold',
     color: colors.text.primary,
     marginBottom: spacing.sm,
   },
-  label: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.text.primary,
-  },
-  detail: {
-    fontSize: 14,
+  infoText: {
     color: colors.text.secondary,
-    marginTop: spacing.xs,
+    marginTop: 2,
   },
-  noData: {
-    fontSize: 14,
-    color: colors.text.disabled,
-    fontStyle: 'italic',
+  divider: {
+    marginVertical: spacing.md,
   },
-  detailRow: {
+  articuloRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: colors.white,
+    borderRadius: 8,
+    padding: spacing.md,
     marginBottom: spacing.sm,
   },
-  detailLabel: {
-    fontSize: 14,
-    color: colors.text.secondary,
+  articuloInfo: {
+    flex: 1,
   },
-  detailValue: {
-    fontSize: 14,
+  articuloName: {
+    fontWeight: '500',
     color: colors.text.primary,
   },
+  articuloSubtotal: {
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  totals: {
+    backgroundColor: colors.white,
+    borderRadius: 8,
+    padding: spacing.md,
+  },
   totalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: spacing.xs,
+  },
+  totalFinalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     borderTopWidth: 1,
     borderTopColor: colors.border,
     paddingTop: spacing.sm,
-    marginTop: spacing.sm,
+    marginTop: spacing.xs,
   },
   totalLabel: {
-    fontSize: 18,
     fontWeight: 'bold',
     color: colors.text.primary,
   },
-  totalValue: {
-    fontSize: 18,
+  totalAmount: {
     fontWeight: 'bold',
     color: colors.primary,
   },
   actions: {
-    marginTop: spacing.md,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginBottom: spacing.xl,
   },
-  button: {
-    marginBottom: spacing.sm,
-  },
-  errorContainer: {
+  actionButton: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  errorText: {
-    fontSize: 16,
-    color: colors.error,
+    minWidth: '45%',
   },
 });
+
+export default FacturaDetailScreen;

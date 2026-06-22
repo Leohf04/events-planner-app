@@ -1,30 +1,20 @@
 import React from 'react';
-import { View, StyleSheet, ViewStyle } from 'react-native';
-import { colors, borderRadius, spacing } from '../theme';
+import { Card as PaperCard } from 'react-native-paper';
 
 interface CardProps {
   children: React.ReactNode;
-  style?: ViewStyle;
+  style?: any;
+  onPress?: () => void;
 }
 
-export const Card: React.FC<CardProps> = ({ children, style }) => {
+export const Card: React.FC<CardProps> = ({ children, style, onPress }) => {
   return (
-    <View style={[styles.card, style]}>
-      {children}
-    </View>
+    <PaperCard mode="elevated" onPress={onPress} style={style}>
+      <PaperCard.Content>
+        {children}
+      </PaperCard.Content>
+    </PaperCard>
   );
 };
 
-const styles = StyleSheet.create({
-  card: {
-    backgroundColor: colors.white,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    shadowColor: colors.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-    marginBottom: spacing.sm,
-  },
-});
+export default Card;

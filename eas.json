@@ -14,11 +14,11 @@
         "buildType": "apk"
       },
       "distribution": "internal",
-      "node": "22.14.0"
+      "node": "20.20.2"
     },
     "production": {
       "autoIncrement": true,
-      "node": "22.14.0"
+      "node": "20.20.2"
     }
   },
   "submit": {

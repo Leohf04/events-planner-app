@@ -1,38 +1,61 @@
 import React, { useState, useEffect } from 'react';
 import {
   View,
-  Text,
-  StyleSheet,
   ScrollView,
-  Alert,
+  StyleSheet,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { Button, Text } from 'react-native-paper';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Button, Input, Header } from '../../components';
+import { Input, Select, Header } from '../../components';
+import { useAlert } from '../../components/AlertDialog';
 import { colors, spacing } from '../../theme';
-import { saveArticulo, updateArticulo, getArticuloById, Articulo } from '../../services/storageService';
+import { saveArticulo, updateArticulo, getArticuloById } from '../../database/repositories/articulosRepository';
+import { getMonedas, MonedaRow } from '../../database/repositories/monedasRepository';
 
 type ArticulosStackParamList = {
   ArticulosList: undefined;
-  ArticuloForm: { articuloId?: string };
+  ArticuloForm: { articuloId?: number };
 };
+
+interface FormData {
+  nombre: string;
+  descripcion: string;
+  precio_compra: string;
+  precio_venta: string;
+  id_moneda_compra: number | null;
+  id_moneda_venta: number | null;
+  stock: string;
+}
 
 export const ArticuloFormScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<ArticulosStackParamList>>();
   const route = useRoute<RouteProp<ArticulosStackParamList, 'ArticuloForm'>>();
   const { articuloId } = route.params || {};
-  
+  const isEditing = !!articuloId;
+  const alert = useAlert();
+
+  const [formData, setFormData] = useState<FormData>({
+    nombre: '',
+    descripcion: '',
+    precio_compra: '',
+    precio_venta: '',
+    id_moneda_compra: null,
+    id_moneda_venta: null,
+    stock: '0',
+  });
+
+  const [monedas, setMonedas] = useState<MonedaRow[]>([]);
   const [loading, setLoading] = useState(false);
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  
-  const [nombre, setNombre] = useState('');
-  const [descripcion, setDescripcion] = useState('');
-  const [precio, setPrecio] = useState('');
-  const [stock, setStock] = useState('');
 
   useEffect(() => {
+    const loadInitialData = async () => {
+      const monedasData = await getMonedas();
+      setMonedas(monedasData);
+    };
+    loadInitialData();
     if (articuloId) {
       loadArticulo();
     }
@@ -40,115 +63,168 @@ export const ArticuloFormScreen: React.FC = () => {
 
   const loadArticulo = async () => {
     try {
-      const articulo = await getArticuloById(articuloId!);
-      if (articulo) {
-        setNombre(articulo.nombre);
-        setDescripcion(articulo.descripcion);
-        setPrecio(articulo.precio.toString());
-        setStock(articulo.stock.toString());
+      const data = await getArticuloById(articuloId!);
+      if (data) {
+        setFormData({
+          nombre: data.nombre,
+          descripcion: data.descripcion || '',
+          precio_compra: data.precio_compra.toString(),
+          precio_venta: data.precio_venta.toString(),
+          id_moneda_compra: data.id_moneda_compra,
+          id_moneda_venta: data.id_moneda_venta,
+          stock: data.stock.toString(),
+        });
       }
     } catch (error) {
-      Alert.alert('Error', 'No se pudo cargar el artículo');
+      alert.showAlert({ title: 'Error', message: 'No se pudo cargar el artículo' });
     }
-  };
-
-  const validate = (): boolean => {
-    const newErrors: Record<string, string> = {};
-    
-    if (!nombre.trim()) {
-      newErrors.nombre = 'El nombre es requerido';
-    }
-    if (!precio || parseFloat(precio) <= 0) {
-      newErrors.precio = 'El precio debe ser mayor a 0';
-    }
-    if (!stock || parseInt(stock) < 0) {
-      newErrors.stock = 'El stock debe ser mayor o igual a 0';
-    }
-    
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
   };
 
   const handleSave = async () => {
-    if (!validate()) return;
+    if (!formData.nombre.trim()) {
+      alert.showAlert({ title: 'Error', message: 'El nombre es requerido' });
+      return;
+    }
+
+    const precioVenta = parseFloat(formData.precio_venta);
+    if (isNaN(precioVenta) || precioVenta <= 0) {
+      alert.showAlert({ title: 'Error', message: 'Ingrese un precio de venta válido' });
+      return;
+    }
 
     setLoading(true);
     try {
-      const articuloData = {
-        nombre: nombre.trim(),
-        descripcion: descripcion.trim(),
-        precio: parseFloat(precio),
-        stock: parseInt(stock),
+      const data = {
+        nombre: formData.nombre.trim(),
+        descripcion: formData.descripcion.trim() || null,
+        precio_compra: parseFloat(formData.precio_compra) || 0,
+        precio_venta: precioVenta,
+        id_moneda_compra: formData.id_moneda_compra,
+        id_moneda_venta: formData.id_moneda_venta,
+        stock: parseInt(formData.stock) || 0,
       };
 
-      if (articuloId) {
-        await updateArticulo(articuloId, articuloData);
+      if (isEditing) {
+        await updateArticulo(articuloId!, data);
+        alert.showAlert({ title: 'Éxito', message: 'Artículo actualizado correctamente' });
       } else {
-        await saveArticulo(articuloData);
+        await saveArticulo(data);
+        alert.showAlert({ title: 'Éxito', message: 'Artículo creado correctamente' });
       }
-      
       navigation.goBack();
     } catch (error) {
-      Alert.alert('Error', 'No se pudo guardar el artículo');
+      alert.showAlert({ title: 'Error', message: 'No se pudo guardar el artículo' });
     } finally {
       setLoading(false);
     }
   };
 
+  const monedaOptions = monedas.map(m => ({
+    label: m.simbolo,
+    value: m.id,
+  }));
+
   return (
     <View style={styles.container}>
       <Header
-        title={articuloId ? 'Editar Artículo' : 'Nuevo Artículo'}
+        title={isEditing ? 'Editar Artículo' : 'Nuevo Artículo'}
         showBack
         onBack={() => navigation.goBack()}
       />
-      
+
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <ScrollView contentContainerStyle={styles.form}>
+        <ScrollView
+          style={styles.flex}
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+        >
           <Input
             label="Nombre"
-            placeholder="Ingrese el nombre del artículo"
-            value={nombre}
-            onChangeText={setNombre}
-            error={errors.nombre}
+            placeholder="Nombre del artículo"
+            value={formData.nombre}
+            onChangeText={(value) => setFormData({ ...formData, nombre: value })}
+            leftIcon="package-variant-closed"
           />
 
           <Input
             label="Descripción"
-            placeholder="Ingrese la descripción"
-            value={descripcion}
-            onChangeText={setDescripcion}
+            placeholder="Descripción del artículo"
+            value={formData.descripcion}
+            onChangeText={(value) => setFormData({ ...formData, descripcion: value })}
             multiline
             numberOfLines={3}
           />
 
-          <Input
-            label="Precio"
-            placeholder="0.00"
-            value={precio}
-            onChangeText={setPrecio}
-            error={errors.precio}
-            keyboardType="decimal-pad"
-          />
+          <Text variant="titleSmall" style={styles.sectionTitle}>
+            Precios
+          </Text>
+
+          <View style={styles.priceRow}>
+            <View style={styles.priceInput}>
+              <Input
+                label="Precio de Compra"
+                placeholder="0.00"
+                value={formData.precio_compra}
+                onChangeText={(value) => setFormData({ ...formData, precio_compra: value })}
+                leftIcon="currency-usd"
+                keyboardType="decimal-pad"
+              />
+            </View>
+            <View style={styles.monedaSelect}>
+              <Select
+                label="Moneda"
+                placeholder="Seleccionar"
+                value={formData.id_moneda_compra || ''}
+                options={monedaOptions}
+                onChange={(value) => setFormData({ ...formData, id_moneda_compra: value as number })}
+              />
+            </View>
+          </View>
+
+          <View style={styles.priceRow}>
+            <View style={styles.priceInput}>
+              <Input
+                label="Precio de Venta *"
+                placeholder="0.00"
+                value={formData.precio_venta}
+                onChangeText={(value) => setFormData({ ...formData, precio_venta: value })}
+                leftIcon="currency-usd"
+                keyboardType="decimal-pad"
+              />
+            </View>
+            <View style={styles.monedaSelect}>
+              <Select
+                label="Moneda"
+                placeholder="Seleccionar"
+                value={formData.id_moneda_venta || ''}
+                options={monedaOptions}
+                onChange={(value) => setFormData({ ...formData, id_moneda_venta: value as number })}
+              />
+            </View>
+          </View>
 
           <Input
             label="Stock"
             placeholder="0"
-            value={stock}
-            onChangeText={setStock}
-            error={errors.stock}
+            value={formData.stock}
+            onChangeText={(value) => setFormData({ ...formData, stock: value })}
+            leftIcon="package-variant"
             keyboardType="number-pad"
           />
 
           <Button
-            title={articuloId ? 'Actualizar' : 'Crear'}
+            mode="contained"
             onPress={handleSave}
             loading={loading}
+            icon={isEditing ? 'content-save' : 'plus-circle-outline'}
             style={styles.button}
-          />
+            contentStyle={{ paddingVertical: 6 }}
+          >
+            {isEditing ? 'Actualizar Artículo' : 'Crear Artículo'}
+          </Button>
         </ScrollView>
       </KeyboardAvoidingView>
     </View>
@@ -163,10 +239,29 @@ const styles = StyleSheet.create({
   flex: {
     flex: 1,
   },
-  form: {
+  content: {
     padding: spacing.md,
+  },
+  sectionTitle: {
+    fontWeight: 'bold',
+    color: colors.text.primary,
+    marginBottom: spacing.sm,
+    marginTop: spacing.md,
+  },
+  priceRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  priceInput: {
+    flex: 2,
+  },
+  monedaSelect: {
+    flex: 1,
+    justifyContent: 'center',
   },
   button: {
     marginTop: spacing.lg,
   },
 });
+
+export default ArticuloFormScreen;
