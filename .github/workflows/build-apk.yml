@@ -3,7 +3,7 @@ name: Build Android APK (Local EAS)
 on:
   workflow_dispatch:
   push:
-    branches: [master]
+    branches: [ master ]
 
 jobs:
   build:
@@ -17,30 +17,34 @@ jobs:
         with:
           node-version: 18
 
-      - name: Instalar pnpm (con acción oficial)
-        uses: pnpm/action-setup@v2
-        with:
-          version: 8 # Puedes usar la versión que tengas en tu proyecto
+      # Habilitamos Corepack y activamos pnpm (sin depender de acciones externas)
+      - name: Habilitar Corepack y pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@latest --activate
 
-      - name: Obtener directorio de almacenamiento de pnpm
-        run: echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_ENV
+      # Verificamos que pnpm está disponible
+      - name: Verificar pnpm
+        run: pnpm --version
 
+      # Usamos cache para acelerar builds futuros (opcional pero recomendado)
       - name: Cache de pnpm
         uses: actions/cache@v4
         with:
-          path: ${{ env.STORE_PATH }}
+          path: ~/.local/share/pnpm/store
           key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
           restore-keys: |
             ${{ runner.os }}-pnpm-store-
 
-      - name: Instalar dependencias con pnpm
+      # Instalamos dependencias sin congelar el lockfile (para evitar incompatibilidades)
+      - name: Instalar dependencias
         run: pnpm install --no-frozen-lockfile
 
       - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
-          distribution: "temurin"
-          java-version: "17"
+          distribution: 'temurin'
+          java-version: '17'
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
