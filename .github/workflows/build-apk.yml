@@ -12,28 +12,23 @@ jobs:
       - name: Checkout código
         uses: actions/checkout@v4
 
-      # 1. Definir el packageManager en package.json (evita que Corepack intervenga)
       - name: Definir packageManager
         run: |
           npm pkg set packageManager=pnpm@8.15.9
 
-      # 2. Configurar Node.js 18
       - name: Setup Node.js 18
         uses: actions/setup-node@v4
         with:
           node-version: 18
 
-      # 3. Instalar pnpm (acción oficial, más fiable)
       - name: Instalar pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 8.15.9  # Versión estable reciente
+          version: 8.15.9
 
-      # 4. Verificar que pnpm está disponible
       - name: Verificar pnpm
         run: pnpm --version
 
-      # 5. Cache de pnpm (acelera)
       - name: Cache de pnpm
         uses: actions/cache@v4
         with:
@@ -42,7 +37,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pnpm-store-
 
-      # 6. Instalar dependencias sin congelar el lockfile (por si hay diferencias de versión)
       - name: Instalar dependencias
         run: pnpm install --no-frozen-lockfile
 
@@ -57,9 +51,6 @@ jobs:
 
       - name: Instalar EAS CLI globalmente
         run: pnpm install -g eas-cli
-
-      - name: Login a Expo
-        run: npx expo login --non-interactive --token ${{ secrets.EXPO_TOKEN }}
 
       - name: Construir APK localmente
         run: |
