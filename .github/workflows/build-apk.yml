@@ -59,7 +59,7 @@ jobs:
       - name: Construir APK localmente (optimizado)
         run: |
           export GRADLE_OPTS="-Xmx3072m -XX:MaxMetaspaceSize=512m"
-          eas build --platform android --local --profile preview --output=app.apk --non-interactive --max-workers 2
+          eas build --platform android --local --profile preview --output=app.apk --non-interactive
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
