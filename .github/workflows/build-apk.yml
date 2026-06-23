@@ -1,4 +1,4 @@
-name: Build Android APK (Local EAS)
+name: Build Android APK (EAS Cloud)
 
 on:
   workflow_dispatch:
@@ -56,14 +56,13 @@ jobs:
       - name: Instalar EAS CLI globalmente
         run: pnpm install -g eas-cli
 
-      - name: Construir APK localmente (optimizado)
+      - name: Construir APK en la nube
         run: |
-          export GRADLE_OPTS="-Xmx3072m -XX:MaxMetaspaceSize=512m"
-          eas build --platform android --local --profile preview --output=app.apk --non-interactive
+          eas build --platform android --profile preview --non-interactive
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
-      - name: Subir APK como artefacto
+      - name: Subir APK como artefacto (opcional)
         uses: actions/upload-artifact@v4
         with:
           name: mi-app-android
