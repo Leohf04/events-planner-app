@@ -2,15 +2,82 @@
 .expo/
 dist/
 web-build/
+expo-env.d.ts
 
 # Dependencias
 node_modules/
+.pnpm-store/
 
 # Logs
 npm-debug.*
 yarn-debug.*
 yarn-error.*
+pnpm-debug.log
+lerna-debug.log
 
-# Sistema (Xubuntu/Linux)
+# Android (generado por prebuild)
+android/
+*.apk
+*.ap_
+*.aab
+*.dex
+*.class
+*.jar
+*.keystore
+*.jks
+android/app/build/
+android/.gradle/
+android/local.properties
+android/.project
+android/.classpath
+android/.settings/
+android/gradle/wrapper/gradle-wrapper.jar
+
+# iOS (generado por prebuild)
+ios/
+*.xcworkspace
+*.xcuserdata
+*.xcscheme
+*.xcuserstate
+*.xcuserdatad
+ios/Pods/
+ios/build/
+Podfile.lock
+
+# Variables de entorno
+.env
+.env.local
+.env.*.local
+
+# Archivos temporales
+*.tmp
+*.temp
+.cache/
+.parcel-cache/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Editor / IDE
+.vscode/
+.idea/
+*.iml
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Cobertura de pruebas
+coverage/
+*.lcov
+
+# Archivos de build
+build/
+*.log
+
+# Archivos de sistema (Linux/macOS)
 .DS_Store
 Thumbs.db
